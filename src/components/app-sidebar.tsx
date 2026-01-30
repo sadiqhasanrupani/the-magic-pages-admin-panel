@@ -4,15 +4,12 @@ import * as React from "react";
 import {
   IconBook,
   IconCamera,
-  IconChartBar,
   IconDashboard,
   IconDatabase,
   IconFileAi,
   IconFileDescription,
   IconFileWord,
-  IconFolder,
   IconHelp,
-  IconListDetails,
   IconReport,
   IconSearch,
   IconSettings,
@@ -34,12 +31,9 @@ import {
 } from "@/components/ui/sidebar";
 import { BookOpenIcon } from "lucide-react";
 
+import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
+
 const data = {
-  user: {
-    name: "Sohail Abbas",
-    email: "themagicpages04@gmail.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -58,7 +52,7 @@ const data = {
     // },
     {
       title: "Book",
-      url: "/book",
+      url: "/admin/books",
       icon: IconBook,
     },
     {
@@ -152,6 +146,8 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useCurrentUser();
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -175,7 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   );

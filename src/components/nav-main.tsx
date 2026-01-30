@@ -48,11 +48,11 @@ export function NavMain({
         </SidebarMenu>
         <SidebarMenu>
           {items.map((item) => {
-            const isActive = pathname === item.url;
-            console.log(
-              `is active status: pathname = ${pathname} and item.url = ${item.url} `,
-              isActive,
-            );
+            // Active if exact match OR if it's a sub-route (e.g. /admin/books/123 active for /admin/books)
+            // But exclude root '/' unless exact match
+            const isActive = item.url === "/"
+              ? pathname === "/"
+              : pathname === item.url || pathname.startsWith(`${item.url}/`);
 
             return (
               <SidebarMenuItem key={item.title}>
@@ -62,7 +62,7 @@ export function NavMain({
                     className={cn(
                       "w-full flex flex-row",
                       isActive &&
-                        "bg-sidebar-active text-sidebar-active-foreground hover:bg-sidebar-active hover:text-sidebar-active-foreground",
+                      "bg-sidebar-active text-sidebar-active-foreground hover:bg-sidebar-active hover:text-sidebar-active-foreground",
                     )}
                   >
                     {item.icon && <item.icon />}
