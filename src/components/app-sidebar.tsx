@@ -11,6 +11,7 @@ import {
   IconFileWord,
   IconHelp,
   IconPackage,
+  IconReceipt,
   IconReport,
   IconSearch,
   IconSettings,
@@ -60,6 +61,11 @@ const data = {
       title: "Orders",
       url: "/orders",
       icon: IconPackage,
+    },
+    {
+      title: "Invoices",
+      url: "/invoices",
+      icon: IconReceipt,
     },
     {
       title: "Users",
