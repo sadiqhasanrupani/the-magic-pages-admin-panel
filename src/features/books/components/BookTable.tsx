@@ -100,7 +100,7 @@ export function BookTable() {
                 const maxPrice = hasVariants ? Math.max(...prices) : null;
 
                 const priceDisplay =
-                  !hasVariants
+                  minPrice === null || maxPrice === null
                     ? "—"
                     : minPrice === maxPrice
                       ? formatCurrency(minPrice)
