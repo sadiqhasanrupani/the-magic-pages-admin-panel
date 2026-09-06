@@ -115,6 +115,14 @@ export interface Order {
   shippingAddress: OrderAddress | null;
   /** Shipping in paise. Already part of `total`. */
   shippingCost: number;
+  /**
+   * Tax in paise, INCLUSIVE — already part of `total`, like `shippingCost`.
+   *
+   * Recorded at checkout from the variant rates in force at the time of sale,
+   * so it stays correct on an old order even after a rate is edited. `0` for an
+   * untaxed basket and for orders predating the tax columns.
+   */
+  taxAmount: number;
   carrier: string | null;
   trackingNumber: string | null;
   trackingUrl: string | null;

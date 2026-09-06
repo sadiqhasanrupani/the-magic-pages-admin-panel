@@ -183,9 +183,11 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
 
               <Separator className="my-4" />
 
-              {/* `shippingCost` is already inside `total`, so this is shown as a
-                  breakdown line and the goods subtotal is derived by subtraction
-                  — never by adding shipping on top. */}
+              {/* `shippingCost` and `taxAmount` are both already inside `total`,
+                  so they are shown as breakdown lines and the goods subtotal is
+                  derived by subtracting shipping — never by adding either on
+                  top. Tax is NOT subtracted: it is a slice of the goods price,
+                  not a separate charge alongside it. */}
               <dl className="space-y-2 text-sm max-w-xs ml-auto">
                 <div className="flex justify-between gap-8">
                   <dt className="text-muted-foreground">Items subtotal</dt>
@@ -202,6 +204,14 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                     {formatPaise(order.shippingCost, order.currency)}
                   </dd>
                 </div>
+                {order.taxAmount > 0 && (
+                  <div className="flex justify-between gap-8">
+                    <dt className="text-muted-foreground">Tax (included)</dt>
+                    <dd className="tabular-nums text-muted-foreground">
+                      {formatPaise(order.taxAmount, order.currency)}
+                    </dd>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between gap-8 font-semibold text-base">
                   <dt>Total</dt>
