@@ -1,7 +1,20 @@
 // --- Book Variant ---
+
+/**
+ * Formats the admin panel's variant `<Select>` offers.
+ *
+ * The backend enum (`libs/contract/src/books/enums/book-format.enum.ts`) is
+ * wider than this — it also carries `physical`, `pdf`, `epub`, `docx` and
+ * `worksheet`. This union stays narrow because it types what the form can
+ * actually produce; anything read back off the wire is classified with
+ * `isPhysicalFormat` / `isDigitalFormat` from `../utils/book-format`, which are
+ * written against the full backend set.
+ */
+export type BookFormat = 'hardcover' | 'paperback' | 'ebook' | 'audiobook';
+
 export interface BookVariant {
   id: string;
-  format: 'hardcover' | 'paperback' | 'ebook' | 'audiobook';
+  format: BookFormat;
   originalPrice?: { amount: string; currency: string; display: string };
   price: { amount: string; currency: string; display: string };
   discountPercentage?: number;
@@ -9,14 +22,34 @@ export interface BookVariant {
   isbn?: string;
   includeTax?: boolean;
   taxPercentage?: number;
+
+  /** Backend-computed physical/digital flag, mirrored from `isPhysicalFormat`. */
+  isPhysical?: boolean;
+
+  /**
+   * Storage URL of the deliverable behind a digital variant — the ebook or
+   * audiobook file itself, which buyers receive as a secure download link after
+   * payment.
+   *
+   * Only ever populated for admin callers: `transformBookToResponse` strips it
+   * for every public/storefront response, because a digital variant's `fileUrl`
+   * *is* the paid product. Undefined on physical variants (nothing downloadable
+   * ships with a hardcover) and on any digital variant that has no file attached
+   * yet.
+   */
+  fileUrl?: string;
 }
 
 export interface CreateBookVariantDto {
-  format: 'hardcover' | 'paperback' | 'ebook' | 'audiobook';
+  format: BookFormat;
   originalPriceCents?: number;
   priceCents: number;
   stockQuantity: number;
   isbn?: string;
+  /**
+   * Deliverable URL for digital variants, obtained from `POST /admin/upload`.
+   * Omitted entirely for physical formats.
+   */
   fileUrl?: string;
   includeTax?: boolean;
   taxPercentage?: number;

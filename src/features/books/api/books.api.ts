@@ -25,6 +25,8 @@ export const createBook = async (payload: CreateBookPayload): Promise<Book> => {
 };
 
 export const updateBook = async (id: string, payload: UpdateBookPayload): Promise<Book> => {
+  console.log(`[books.api]::${Date.now()}::payload::`, payload);
+  
   const { data } = await apiClient.put(`${BASE_URL}/${id}`, payload);
   return data;
 };

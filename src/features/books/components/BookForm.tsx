@@ -36,10 +36,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import { bookKeys, useBookMutation } from "../hooks/useBooks";
-// Removed transformers as we now use direct price binding
-// import { formatPriceForApi, formatPriceForForm } from "../utils/transformers"; 
 import { ImageUploader } from "./ImageUploader";
 import { SingleImageUploader } from "./SingleImageUploader";
+import { DigitalMaterialUploader } from "./DigitalMaterialUploader";
+import { isDigitalFormat, isPhysicalFormat } from "../utils/book-format";
 import { MOCK_CATEGORIES, MOCK_AGE_GROUPS } from "../constants";
 import type { Book, CreateBookPayload } from "../types/books.types";
 import { useAgeGroupsQuery } from "@/features/age-groups/hooks/useAgeGroups";
@@ -48,6 +48,8 @@ import { cn } from "@/lib/utils";
 import { useCategoriesQuery } from "@/features/categories/hooks/useCategories";
 import Header from "@/components/header";
 import { queryClient } from "@/providers/query-provider";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
 // --- Schema Definition ---
 
@@ -65,6 +67,9 @@ const bookVariantSchema = z.object({
   isbn: z.string().optional(),
   includeTax: z.boolean().default(false),
   taxPercentage: z.number().min(0, "Tax must be positive").max(100, "Tax cannot exceed 100%").optional(),
+  // Storage URL of the deliverable, produced by POST /admin/upload. Only
+  // meaningful for digital formats — see the format-conditional refine below.
+  fileUrl: z.string().optional(),
 }).refine(
   (data) => {
     // If original price is set, discounted price must be less
@@ -83,6 +88,23 @@ const bookVariantSchema = z.object({
     return true;
   },
   { message: "Tax percentage is required when tax is included", path: ["taxPercentage"] }
+).refine(
+  (data) => {
+    // A digital variant's file IS the product — without it the buyer pays and
+    // receives a download link to nothing. Physical formats ship in a box and
+    // never carry a deliverable, so the field is not merely optional for them,
+    // it is meaningless.
+    //
+    // This applies on edit as well as create: a saved digital variant with no
+    // file is already unfulfillable, so surfacing it the next time someone opens
+    // the book is the point, not an accident.
+    if (isPhysicalFormat(data.format)) return true;
+    return !!data.fileUrl;
+  },
+  {
+    message: "Digital formats need a deliverable file — this is what buyers download after purchase",
+    path: ["fileUrl"],
+  }
 );
 
 const bookFormSchema = z.object({
@@ -124,6 +146,24 @@ const bookFormSchema = z.object({
 // --- Inferred Type (Golden Source) ---
 export type BookFormValues = z.infer<typeof bookFormSchema>;
 
+/**
+ * Shape of a freshly added variant row. Shared by the create-mode default and
+ * the "Add Variant" button so the two cannot drift apart.
+ *
+ * Defaults to paperback, which is physical, so a new row starts without the
+ * deliverable uploader on screen.
+ */
+const emptyVariant = (): BookFormValues["variants"][number] => ({
+  format: "paperback",
+  originalPrice: undefined,
+  price: 0,
+  stockQuantity: 0,
+  isbn: "",
+  includeTax: false,
+  taxPercentage: undefined,
+  fileUrl: "",
+});
+
 interface BookFormProps {
   initialData?: Book;
 }
@@ -147,10 +187,19 @@ export function BookForm({ initialData }: BookFormProps) {
     error: categoriesError
   } = useCategoriesQuery();
 
+  useEffect(() => {
+   if (ageGroupIsError) {
+    console.error("Failed to load age groups:", ageGroupError);
+    toast.error("Failed to load age groups. Please try again later.");
+   } 
+  }, [ageGroupIsError, ageGroupError])
+
 
   const { createMutation, updateMutation } = useBookMutation();
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
+  console.log(`[BookForm]::${Date.now()}::initial data::`, initialData);
+  
   // --- Default Values Logic ---
   const defaultValues: BookFormValues = initialData
     ? {
@@ -182,6 +231,11 @@ export function BookForm({ initialData }: BookFormProps) {
         isbn: v.isbn,
         includeTax: v.includeTax ?? false,
         taxPercentage: v.taxPercentage,
+        // GET /admin/books/:id returns fileUrl for admin callers, so an existing
+        // deliverable pre-fills here and the uploader renders its "current file"
+        // state rather than an empty dropzone. Physical variants come back
+        // without one, which is correct — the field is hidden for them anyway.
+        fileUrl: v.fileUrl ?? "",
       })),
       genre: initialData.genre || "",
     }
@@ -205,9 +259,7 @@ export function BookForm({ initialData }: BookFormProps) {
       allowWishlist: true,
       metaTitle: "",
       metaDescription: "",
-      variants: [
-        { format: "paperback", originalPrice: undefined, price: 0, stockQuantity: 0, isbn: "", includeTax: false, taxPercentage: undefined },
-      ],
+      variants: [emptyVariant()],
     };
 
   const form = useForm<BookFormValues>({
@@ -275,9 +327,18 @@ export function BookForm({ initialData }: BookFormProps) {
         priceCents: Math.round(v.price * 100), // Convert to cents
         includeTax: v.includeTax,
         taxPercentage: v.includeTax ? v.taxPercentage : undefined,
+
+        // Deliverable URL, already uploaded via POST /admin/upload — the same
+        // two-step flow the cover image uses. Omitted entirely for physical
+        // formats: the backend leaves `fileUrl` untouched when the key is
+        // absent, which keeps this change strictly additive to the existing
+        // payload rather than starting to send a new key on every request.
+        fileUrl: isDigitalFormat(v.format) ? (v.fileUrl || undefined) : undefined,
       })),
     };
 
+    console.log(`[BookForm]::${Date.now()}::payload::`, payload);
+    
 
     try {
       if (initialData) {
@@ -508,6 +569,12 @@ export function BookForm({ initialData }: BookFormProps) {
                   const includeTax = form.watch(`variants.${index}.includeTax`);
                   const discountPercent = calculateDiscountPercentage(originalPrice || 0, discountedPrice || 0);
 
+                  // Drives the deliverable uploader below: shown only for
+                  // formats that are actually a file (ebook/audiobook), never
+                  // for ones that ship in a box.
+                  const variantFormat = form.watch(`variants.${index}.format`);
+                  const isDigital = isDigitalFormat(variantFormat);
+
                   return (
                     <div key={field.id} className="relative grid gap-4 p-4 border rounded-lg bg-muted/20">
                       <Button
@@ -529,7 +596,21 @@ export function BookForm({ initialData }: BookFormProps) {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Format</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select
+                                onValueChange={(next) => {
+                                  field.onChange(next);
+                                  // Switching to a physical format hides the
+                                  // uploader, so drop whatever was staged there
+                                  // rather than leaving an invisible URL to be
+                                  // submitted with a hardcover.
+                                  if (isPhysicalFormat(next)) {
+                                    form.setValue(`variants.${index}.fileUrl`, "", {
+                                      shouldDirty: true,
+                                    });
+                                  }
+                                }}
+                                defaultValue={field.value}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Format" />
@@ -635,6 +716,40 @@ export function BookForm({ initialData }: BookFormProps) {
                         />
                       </div>
 
+                      {/*
+                        Row 3b: Digital material.
+
+                        Rendered only for digital formats. Physical variants get
+                        nothing here at all — not a disabled input — because a
+                        hardcover has no deliverable and a greyed-out uploader
+                        would imply one is merely unavailable right now.
+                      */}
+                      {isDigital && (
+                        <div className="space-y-3 border-t pt-4">
+                          <FormField
+                            control={form.control as any}
+                            name={`variants.${index}.fileUrl`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Digital material</FormLabel>
+                                <FormControl>
+                                  <DigitalMaterialUploader
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSubmitting}
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  The {variantFormat} file itself. Buyers are emailed a secure
+                                  download link for it after payment.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
+
                       {/* Row 4: Tax Section */}
                       <div className="border-t pt-4 space-y-3">
                         <FormField
@@ -687,7 +802,7 @@ export function BookForm({ initialData }: BookFormProps) {
                   variant="outline"
                   size="sm"
                   className="mt-2"
-                  onClick={() => append({ format: "paperback", originalPrice: undefined, price: 0, stockQuantity: 0, isbn: "", includeTax: false, taxPercentage: undefined })}
+                  onClick={() => append(emptyVariant())}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Add Variant

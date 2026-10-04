@@ -13,6 +13,8 @@ interface EditBookFormProps {
 export function EditBookForm({ bookId }: EditBookFormProps) {
   const { data: book, isLoading, error } = useBookQuery(bookId);
 
+  console.log(`[EditBookForm]::${Date.now()}::book data::`, book);
+  
   if (isLoading) {
     return (
       <div className="space-y-6">
